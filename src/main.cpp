@@ -6,6 +6,12 @@
 #include <qheaderview.h>
 #include <QMessageBox>
 #include <QStringList>
+
+#include <QLineEdit>
+#include <QBoxLayout>
+#include <QWidget>
+#include <QLabel>
+
 #include "DicomHeaderReader.h"
 
 int main(int argc, char* argv[])
@@ -31,14 +37,26 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    // Create main window container
+    QWidget window;
+    window.setWindowTitle("Dicom Haeder Viewer");
+
+    // Main Layout
+    QVBoxLayout* layout = new QVBoxLayout(&window);
+
+    // Search box
+    QLabel* searchLabel = new QLabel("Search DICOM Metadata:");
+
+    QLineEdit* searchBox = new QLineEdit();
+    searchBox->setPlaceholderText("Search by Tag, Attribute Name, VR or value ...");
+
+
     // Create the metadata table
-    QTableWidget table;
+    QTableWidget* table = new QTableWidget();
 
-    table.setWindowTitle("DICOM Header Viewer");
+    table->setColumnCount(4);
 
-    table.setColumnCount(4);
-
-    table.setHorizontalHeaderLabels({
+    table->setHorizontalHeaderLabels({
         "Tag",
         "Name",
         "VR",
@@ -46,20 +64,20 @@ int main(int argc, char* argv[])
         });
 
     //set number of rows
-    table.setRowCount(static_cast<int>(reader.Entries().size()));
+    table->setRowCount(static_cast<int>(reader.Entries().size()));
 
     //populate the table
     int row = 0;
 
     for (const auto& entry : reader.Entries())
     {
-        table.setItem(row, 0, new QTableWidgetItem(entry.tag));
+        table->setItem(row, 0, new QTableWidgetItem(entry.tag));
 
-        table.setItem(row, 1, new QTableWidgetItem(entry.name));
+        table->setItem(row, 1, new QTableWidgetItem(entry.name));
 
-        table.setItem(row, 2, new QTableWidgetItem(entry.vr));
+        table->setItem(row, 2, new QTableWidgetItem(entry.vr));
 
-        table.setItem(row, 3, new QTableWidgetItem(entry.value));
+        table->setItem(row, 3, new QTableWidgetItem(entry.value));
 
         ++row;
 
@@ -67,19 +85,50 @@ int main(int argc, char* argv[])
 
 
     //Configure table appearance
-    table.setAlternatingRowColors(true);
+    table->setAlternatingRowColors(true);
 
-    table.setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
 
-    table.setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
-    table.horizontalHeader()->sectionResizeMode(QHeaderView::ResizeToContents);
+    table->horizontalHeader()->sectionResizeMode(QHeaderView::ResizeToContents);
 
-    table.horizontalHeader()->setStretchLastSection(true);
+    table->horizontalHeader()->setStretchLastSection(true);
         
-    table.resize(1200, 750);
+    table->resize(1200, 750);
 
-    table.show();
+    table->horizontalHeader()->setStretchLastSection(true);
+
+    // add controls to layout
+    layout->addWidget(searchLabel);
+    layout->addWidget(searchBox);
+    layout->addWidget(table);
+
+    window.resize(1200, 750);
+
+    QObject::connect(searchBox, &QLineEdit::textChanged, table, [table](const QString& searchText)
+        {
+            for (int row = 0; row < table->rowCount(); ++row)
+            {
+                bool match = false;
+
+                for (int column = 0; column < table->columnCount(); ++column)
+                {
+                    QTableWidgetItem* item = table->item(row, column);
+
+                    if (item && item->text().contains(searchText, Qt::CaseSensitive))
+                    {
+                        match = true;
+                        break;
+                    }
+                }
+                table->setRowHidden(row, !match);
+
+            }
+        });
+
+    window.show();
 
     return app.exec();
+
 }
