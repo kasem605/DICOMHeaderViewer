@@ -1,6 +1,9 @@
 # Prerequisites
 *.d
 
+# Ignore .vs
+.vs/
+
 # Compiled Object files
 *.slo
 *.lo
