@@ -19,6 +19,7 @@
 #include <QScrollArea>
 
 #include "DicomHeaderReader.h"
+#include "DicomImageView.h"
 
 int main(int argc, char* argv[])
 {
@@ -62,6 +63,8 @@ int main(int argc, char* argv[])
     if (!reader.LoadImage(filePath,dicomImage, imageError))
     {
         QMessageBox::critical(nullptr, "Image loading error", imageError);
+
+        return -1;
     }
 
 
@@ -70,13 +73,9 @@ int main(int argc, char* argv[])
     qDebug() << "Height: " << dicomImage.height();
     qDebug() << "Format: " << dicomImage.format();
 
-    QLabel* imageLabel = new QLabel;
+    DicomImageView* imageView = new DicomImageView();
 
-    imageLabel->setAlignment(Qt::AlignCenter);
-
-    imageLabel->setMinimumSize(400, 400);
-
-    imageLabel->setPixmap(QPixmap::fromImage(dicomImage));
+    imageView->SetImage(dicomImage);
 
 
 
@@ -140,16 +139,12 @@ int main(int argc, char* argv[])
 
     table->horizontalHeader()->setStretchLastSection(true);
         
-    table->resize(1200, 750);
-
-    table->horizontalHeader()->setStretchLastSection(true);
-
     // add controls to layout
     layout->addWidget(searchLabel);
     layout->addWidget(searchBox);
 
     contentLayout->addWidget(table, 3);
-    contentLayout->addWidget(imageLabel, 2);
+    contentLayout->addWidget(imageView, 2);
 
     layout->addLayout(contentLayout);
 
@@ -165,7 +160,7 @@ int main(int argc, char* argv[])
                 {
                     QTableWidgetItem* item = table->item(row, column);
 
-                    if (item && item->text().contains(searchText, Qt::CaseSensitive))
+                    if (item && item->text().contains(searchText, Qt::CaseInsensitive))
                     {
                         match = true;
                         break;

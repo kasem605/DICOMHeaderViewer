@@ -22,9 +22,16 @@ set(DCMTK_DIR
 find_package(Qt6 6.12 REQUIRED COMPONENTS Widgets)
 find_package(DCMTK CONFIG REQUIRED)
 
+set(CMAKE_AUTOMOC ON)
+
 add_executable(DICOMHeaderViewer
     src/main.cpp
- "src/DicomHeaderReader.h" "src/DicomHeaderReader.cpp" "src/DicomHeaderEntry.h")
+    src/DicomHeaderReader.h
+    src/DicomHeaderReader.cpp
+    src/DicomHeaderEntry.h
+    src/DicomImageView.h
+    src/DicomImageView.cpp
+)
 
 target_link_libraries(DICOMHeaderViewer
     PRIVATE
