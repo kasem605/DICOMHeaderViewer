@@ -12,7 +12,14 @@
 #include <QWidget>
 #include <QLabel>
 
+#include <QFileDialog>
+
+#include <QPixmap>
+#include <QHBoxLayout>
+#include <QScrollArea>
+
 #include "DicomHeaderReader.h"
+#include "DicomImageView.h"
 
 int main(int argc, char* argv[])
 {
@@ -27,15 +34,50 @@ int main(int argc, char* argv[])
 
     QString errorMessage;
 
-    QString filePath = "D:/RSNA knee abnormality detection 2026/train_series/1.2.826.0.1.3680043.8.498.10004873229099053869093324292195817260/1.2.826.0.1.3680043.8.498.12343110195036213483454091715412333772/1.2.826.0.1.3680043.8.498.10374285052733466977592225981851620435.dcm";
+    QString filePath = QFileDialog::getOpenFileName(nullptr, 
+                                                    "select DICOM File",
+                                                    "D:/RSNA knee abnormality detection 2026",
+                                                    "DICOM Files (*.dcm);;All Files (*.*)");
+     
+    // check if the user selects a file
+    if (filePath.isEmpty())
+    {
+        qDebug() << "NoDICOM file is selected.";
+        return 0;
+    }
 
     if (!reader.LoadFile(filePath, errorMessage))
     {
-        qDebug() << "Dicom loading failed:";
-        qDebug() << errorMessage;
+        QMessageBox::critical(nullptr, "DICOM Loading Error", errorMessage);
 
         return -1;
     }
+
+    qDebug() << "DICOM file load successfully:";
+    qDebug() << filePath;
+
+    QImage dicomImage;
+
+    QString imageError;
+
+    if (!reader.LoadImage(filePath,dicomImage, imageError))
+    {
+        QMessageBox::critical(nullptr, "Image loading error", imageError);
+
+        return -1;
+    }
+
+
+    qDebug() << "Image loaded successfully";
+    qDebug() << "Width: " << dicomImage.width();
+    qDebug() << "Height: " << dicomImage.height();
+    qDebug() << "Format: " << dicomImage.format();
+
+    DicomImageView* imageView = new DicomImageView();
+
+    imageView->SetImage(dicomImage);
+
+
 
     // Create main window container
     QWidget window;
@@ -50,6 +92,8 @@ int main(int argc, char* argv[])
     QLineEdit* searchBox = new QLineEdit();
     searchBox->setPlaceholderText("Search by Tag, Attribute Name, VR or value ...");
 
+    //Create Horizontal layout
+    QHBoxLayout* contentLayout = new QHBoxLayout();
 
     // Create the metadata table
     QTableWidget* table = new QTableWidget();
@@ -95,14 +139,14 @@ int main(int argc, char* argv[])
 
     table->horizontalHeader()->setStretchLastSection(true);
         
-    table->resize(1200, 750);
-
-    table->horizontalHeader()->setStretchLastSection(true);
-
     // add controls to layout
     layout->addWidget(searchLabel);
     layout->addWidget(searchBox);
-    layout->addWidget(table);
+
+    contentLayout->addWidget(table, 3);
+    contentLayout->addWidget(imageView, 2);
+
+    layout->addLayout(contentLayout);
 
     window.resize(1200, 750);
 
@@ -116,7 +160,7 @@ int main(int argc, char* argv[])
                 {
                     QTableWidgetItem* item = table->item(row, column);
 
-                    if (item && item->text().contains(searchText, Qt::CaseSensitive))
+                    if (item && item->text().contains(searchText, Qt::CaseInsensitive))
                     {
                         match = true;
                         break;

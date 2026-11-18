@@ -4,6 +4,7 @@
 
 #include <QString>
 #include <vector>
+#include <QImage>
 
 class DcmItem;
 
@@ -12,6 +13,12 @@ class DicomHeaderReader
 public:
 	bool LoadFile(
 		const QString& filePath,
+		QString& errorMessage
+	);
+
+	bool  LoadImage(
+		const QString& filePath,
+		QImage& image,
 		QString& errorMessage
 	);
 
