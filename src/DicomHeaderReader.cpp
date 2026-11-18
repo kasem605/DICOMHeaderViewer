@@ -2,6 +2,8 @@
 
 #include <dcmtk/dcmdata/dctk.h>
 
+#include <dcmtk/dcmimgle/dcmimage.h>
+
 #include <QFile>
 
 #include <QByteArray>
@@ -74,6 +76,59 @@ bool DicomHeaderReader::LoadFile(const QString& filePath, QString& errorMessage)
 
 	// Read main DICOM dataset
 	ReadItem(fileFormat.getDataset(), 0, "Dataset");
+
+	return true;
+}
+
+bool DicomHeaderReader::LoadImage(const QString& filePath, QImage& image, QString& errorMessage)
+{
+	image = QImage();
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	// Create DCMTK image decoder
+	DicomImage dicomImage(encodedPath.constData());
+
+	//check whether decoding succeeded
+	if (dicomImage.getStatus() != EIS_Normal)
+	{
+		errorMessage = "DCMTK could not decode the DICOM image.";
+		return false;
+	}
+
+	// get image dimensions
+	unsigned long width = dicomImage.getWidth();
+	unsigned long height = dicomImage.getHeight();
+
+	qDebug() << "DCMTK image width:" << width;
+	qDebug() << "DCMTK image height:" << height;
+	qDebug() << "DCMTK frame count:" << dicomImage.getFrameCount();
+
+	if (width == 0 || height == 0)
+	{
+		errorMessage = "Invalod DICOM Image dimensions";
+		return false;
+	}
+
+	// Convert pixel data to 8-bit grayscale
+	const void* pixelData = dicomImage.getOutputData(8);
+
+	if (pixelData == nullptr)
+	{
+		errorMessage = "Unable to extract DICOM pixel data";
+		return false;
+	}
+
+	//Create Qt image and copy the pixel data
+	QImage decodedImage(
+		static_cast<const uchar*> (pixelData),
+		static_cast<int> (width),
+		static_cast<int> (height),
+		QImage::Format_Grayscale8
+	);
+
+	image = decodedImage.copy();
 
 	return true;
 }
