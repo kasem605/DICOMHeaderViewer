@@ -18,6 +18,13 @@
 #include <QHBoxLayout>
 #include <QScrollArea>
 
+#include <QSlider>
+#include <QBoxLayout>
+
+#include <algorithm>
+#include <vector>
+#include <cstdint>
+
 #include "DicomHeaderReader.h"
 #include "DicomImageView.h"
 
@@ -53,6 +60,39 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    std::vector<uint16_t> rawPixels;
+    unsigned long rawWidth = 0;
+    unsigned long rawHeight = 0;
+    QString rawError;
+
+    if (!reader.LoadRawPixelData(
+        filePath,
+        rawPixels,
+        rawWidth,
+        rawHeight,
+        rawError
+    ))
+    {
+        QMessageBox::critical(nullptr, "Pixel Data Error", rawError);
+
+        return -1;
+    }
+
+    auto [minPixel, maxPixel] = std::minmax_element(rawPixels.begin(), rawPixels.end());
+
+    qDebug() << "Raw pixel width:" << rawWidth;
+    qDebug() << "Raw pixel height:" << rawHeight;
+    qDebug() << "Pixel count:" << rawPixels.size();
+    qDebug() << "Minimum pixel value:" << *minPixel;
+    qDebug() << "Maximum pixel value:" << *maxPixel;
+    qDebug() << "First 10 pixel values:";
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        qDebug() << rawPixels[i];
+    }
+
+
     qDebug() << "DICOM file load successfully:";
     qDebug() << filePath;
 
@@ -77,7 +117,20 @@ int main(int argc, char* argv[])
 
     imageView->SetImage(dicomImage);
 
+    // windows width slider
 
+    QLabel* widthLabel = new QLabel("Window Width: 256");
+    QSlider* widthSlider = new QSlider(Qt::Horizontal);
+
+    widthSlider->setRange(1, 256);
+    widthSlider->setValue(256);
+
+    //window level slider
+    QLabel* levelLabel = new QLabel("Window Width: 128");
+    QSlider* levelSlider = new QSlider(Qt::Horizontal);
+
+    widthSlider->setRange(0, 255);
+    widthSlider->setValue(128);
 
     // Create main window container
     QWidget window;
@@ -143,6 +196,14 @@ int main(int argc, char* argv[])
     layout->addWidget(searchLabel);
     layout->addWidget(searchBox);
 
+    // Window/Level controls
+
+    layout->addWidget(widthLabel);
+    layout->addWidget(widthSlider);
+
+    layout->addWidget(levelLabel);
+    layout->addWidget(levelSlider);
+
     contentLayout->addWidget(table, 3);
     contentLayout->addWidget(imageView, 2);
 
@@ -169,6 +230,20 @@ int main(int argc, char* argv[])
                 table->setRowHidden(row, !match);
 
             }
+        });
+
+    QObject::connect(widthSlider, &QSlider::valueChanged, imageView, [imageView, widthLabel](int value)
+        {
+            imageView->SetWindowWidth(value);
+
+            widthLabel->setText(QString("Window width:%1").arg(value));
+        });
+
+    QObject::connect(levelSlider, &QSlider::valueChanged, imageView, [imageView, levelLabel](int value)
+        {
+            imageView->SetWindowLevel(value);
+
+            levelLabel->setText(QString("WIndow Level:%1").arg(value));
         });
 
     window.show();

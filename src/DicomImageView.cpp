@@ -27,13 +27,6 @@ void DicomImageView::paintEvent(QPaintEvent* event)
 
 	QPainter painter(this);
 
-	if (!painter.isActive())
-	{
-		qDebug() << "QPainter could not be activated";
-
-		return;
-	}
-
 	//paint the background
 	painter.fillRect(rect(), Qt::black);
 
@@ -41,16 +34,53 @@ void DicomImageView::paintEvent(QPaintEvent* event)
 	if (image_.isNull())
 		return;
 
-	// scale image while aspect ratio is preserved
-	QImage scaledImage = image_.scaled(
+	// calculate window boundaries
+	double lower = windowLevel_ - windowWidth_ / 2.0;
+	double upper = windowLevel_ + windowWidth_ / 2.0;
+
+	// create grayscale image with adjusted intensity
+	QImage adjustedImage(image_.size(), QImage::Format_Grayscale8);
+
+
+	for (int y = 0; y < image_.height(); ++y)
+	{
+		const uchar* source = image_.constScanLine(y);
+		uchar* destination = adjustedImage.scanLine(y);
+
+		for (int x = 0; x < image_.width(); ++x)
+		{
+			double pixel = source[x];
+			double value = ((pixel - lower) / (upper - lower)) * 255.0;
+
+			value = qBound(0.0, value, 255.0);
+
+			destination[x] = static_cast<uchar>(value);
+		}
+	}
+
+	//scale image while preserving aspect ration
+
+	QImage scaledImage = adjustedImage.scaled(
 		size(),
 		Qt::KeepAspectRatio,
 		Qt::SmoothTransformation
 	);
 
-	//center the image inside the widget
+	// center image
 	int x = (width() - scaledImage.width()) / 2;
 	int y = (height() - scaledImage.height()) / 2;
 
 	painter.drawImage(x, y, scaledImage);
+}
+
+void DicomImageView::SetWindowWidth(double width)
+{
+	windowWidth_ = qMax(1.0, width);
+	update();
+}
+
+void DicomImageView::SetWindowLevel(double level)
+{
+	windowLevel_ = level;
+	update();
 }

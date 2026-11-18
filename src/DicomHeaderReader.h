@@ -5,6 +5,7 @@
 #include <QString>
 #include <vector>
 #include <QImage>
+#include <cstdint>
 
 class DcmItem;
 
@@ -19,6 +20,14 @@ public:
 	bool  LoadImage(
 		const QString& filePath,
 		QImage& image,
+		QString& errorMessage
+	);
+
+	bool LoadRawPixelData(
+		const QString& filePathg,
+		std::vector<uint16_t>& pixels,
+		unsigned long& width,
+		unsigned long& height,
 		QString& errorMessage
 	);
 

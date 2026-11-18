@@ -133,6 +133,87 @@ bool DicomHeaderReader::LoadImage(const QString& filePath, QImage& image, QStrin
 	return true;
 }
 
+bool DicomHeaderReader::LoadRawPixelData(
+	const QString& filePath,
+	std::vector<uint16_t>& pixels,
+	unsigned long& width,
+	unsigned long& height,
+	QString& errorMessage)
+{
+	pixels.clear();
+	width = 0;
+	height = 0;
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if (status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+		return false;
+	}
+
+	DcmDataset* dataset = fileFormat.getDataset();
+
+	Uint16 rows = 0;
+	Uint16 columns = 0;
+	Uint16 bitsAllocated = 0;
+	Uint16 bitsStored = 0;
+	Uint16 pixelRepresentation = 0;
+
+	if (dataset->findAndGetUint16(DCM_Rows, rows).bad() ||
+		dataset->findAndGetUint16(DCM_Columns, columns).bad() ||
+		dataset->findAndGetUint16(DCM_BitsAllocated, bitsAllocated).bad() ||
+		dataset->findAndGetUint16(DCM_BitsStored, bitsStored).bad() ||
+		dataset->findAndGetUint16(DCM_PixelRepresentation, pixelRepresentation).bad())
+	{
+		errorMessage = "Unable to read required image attributes.";
+		return false;
+	}
+
+	if (bitsAllocated != 16 || pixelRepresentation != 0)
+	{
+		errorMessage = "This reader currently supports unsigned 16-bit allocated pixels only.";
+		return false;
+	}
+
+	const Uint16* pixelData = nullptr;
+
+	status = dataset->findAndGetUint16Array(DCM_PixelData, pixelData);
+
+	if (status.bad() || pixelData == nullptr) 
+	{
+		errorMessage = "Unable to read uncompressed Pixel data.";
+		return false;
+	}
+
+	const size_t pixelCount = static_cast<size_t>(rows) * columns;
+
+
+
+	pixels.reserve(pixelCount);
+
+	for (size_t i = 0; i < pixelCount; ++i)
+	{
+		pixels.push_back(static_cast<uint16_t>(pixelData[i]));
+	}
+
+	width = columns;
+	height = rows;
+
+	qDebug() << "Rows:" << rows;
+	qDebug() << "Columns:" << columns;
+	qDebug() << "Bits Allocated:" << bitsAllocated;
+	qDebug() << "Bits Stored:" << bitsStored;
+	qDebug() << "Pixel Representation:" << pixelRepresentation;
+
+	return true;
+}
+
 const std::vector<DicomHeaderEntry>& DicomHeaderReader::Entries() const
 {
 	return entries_;
