@@ -2,6 +2,8 @@
 
 #include <QWidget>
 #include <QImage>
+#include <cstdint>
+#include <vector>
 
 class DicomImageView : public QWidget
 {
@@ -16,11 +18,19 @@ public:
 
 	void SetWindowLevel(double level);
 
+	void SetRawImage(const std::vector<uint16_t>& pixels, int width, int height)
+		;
 protected:
 	void paintEvent(QPaintEvent* event) override;
 
 private:
 	QImage image_;
-	double windowWidth_ = 256.0;
-	double windowLevel_ = 128.0;
+	double windowWidth_ = 3916.0;
+	double windowLevel_ = 1958.0;
+
+	std::vector<uint16_t> rawPixels_;
+
+	int imageWidth_ = 0;
+	int imageHeight_ = 0;
+
 };

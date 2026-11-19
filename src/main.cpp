@@ -115,22 +115,22 @@ int main(int argc, char* argv[])
 
     DicomImageView* imageView = new DicomImageView();
 
-    imageView->SetImage(dicomImage);
+    imageView->SetRawImage(rawPixels, static_cast<int> (rawWidth), static_cast<int> (rawHeight));
 
-    // windows width slider
+    // windows slider
 
-    QLabel* widthLabel = new QLabel("Window Width: 256");
+    QLabel* widthLabel = new QLabel("Window Width: 3916");
     QSlider* widthSlider = new QSlider(Qt::Horizontal);
 
-    widthSlider->setRange(1, 256);
-    widthSlider->setValue(256);
+    widthSlider->setRange(1, 4096);
+    widthSlider->setValue(3916);
 
     //window level slider
-    QLabel* levelLabel = new QLabel("Window Width: 128");
+    QLabel* levelLabel = new QLabel("Window Width: 1958");
     QSlider* levelSlider = new QSlider(Qt::Horizontal);
 
-    widthSlider->setRange(0, 255);
-    widthSlider->setValue(128);
+    levelSlider->setRange(0, 4095);
+    levelSlider->setValue(1958);
 
     // Create main window container
     QWidget window;

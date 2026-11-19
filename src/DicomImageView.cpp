@@ -31,25 +31,30 @@ void DicomImageView::paintEvent(QPaintEvent* event)
 	painter.fillRect(rect(), Qt::black);
 
 	// Nothing to display
-	if (image_.isNull())
+	if (rawPixels_.empty() || imageWidth_ <= 0 || imageHeight_ <= 0)
+	{
 		return;
+	}
+
 
 	// calculate window boundaries
 	double lower = windowLevel_ - windowWidth_ / 2.0;
 	double upper = windowLevel_ + windowWidth_ / 2.0;
 
 	// create grayscale image with adjusted intensity
-	QImage adjustedImage(image_.size(), QImage::Format_Grayscale8);
+	QImage adjustedImage(imageWidth_, imageHeight_, QImage::Format_Grayscale8);
 
 
-	for (int y = 0; y < image_.height(); ++y)
+	for (int y = 0; y < imageHeight_; ++y)
 	{
-		const uchar* source = image_.constScanLine(y);
 		uchar* destination = adjustedImage.scanLine(y);
 
-		for (int x = 0; x < image_.width(); ++x)
+		for (int x = 0; x < imageWidth_; ++x)
 		{
-			double pixel = source[x];
+			size_t index = static_cast<size_t>(y) * imageWidth_ + x;
+
+			double pixel = rawPixels_[index];
+
 			double value = ((pixel - lower) / (upper - lower)) * 255.0;
 
 			value = qBound(0.0, value, 255.0);
@@ -82,5 +87,22 @@ void DicomImageView::SetWindowWidth(double width)
 void DicomImageView::SetWindowLevel(double level)
 {
 	windowLevel_ = level;
+	update();
+}
+
+void DicomImageView::SetRawImage(const std::vector<uint16_t>& pixels, int width, int height)
+{
+	if (width <= 0 || height < 0)
+		return;
+
+	const size_t expectedSize = static_cast<size_t>(width) * height;
+
+	if (pixels.size() != expectedSize)
+		return;
+
+	rawPixels_ = pixels;
+	imageWidth_ = width;
+	imageHeight_ = height;
+
 	update();
 }
