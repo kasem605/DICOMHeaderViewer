@@ -8,7 +8,6 @@
 #include <QStringList>
 
 #include <QLineEdit>
-#include <QBoxLayout>
 #include <QWidget>
 #include <QLabel>
 
@@ -20,10 +19,14 @@
 
 #include <QSlider>
 #include <QBoxLayout>
+#include <QComboBox>
 
 #include <algorithm>
 #include <vector>
 #include <cstdint>
+
+#include <QPushButton>
+#include <cmath>
 
 #include "DicomHeaderReader.h"
 #include "DicomImageView.h"
@@ -113,24 +116,99 @@ int main(int argc, char* argv[])
     qDebug() << "Height: " << dicomImage.height();
     qDebug() << "Format: " << dicomImage.format();
 
+
+    double dicomWindowCenter = 0.0;
+    double dicomWindowWidth = 0.0;
+
+    QString windowError;
+
+    if (reader.GetWindowCenter(
+        filePath,
+        dicomWindowCenter,
+        windowError
+    ))
+    {
+        qDebug() << "DICOM Window Center:" << dicomWindowCenter;
+    }
+    else
+    {
+        qDebug() << windowError;
+    }
+
+    if (reader.GetWindowWidth(
+        filePath,
+        dicomWindowWidth,
+        windowError
+    ))
+    {
+        qDebug() << "DICOM Window Width:" << dicomWindowWidth;
+    }
+    else
+    {
+        qDebug() << windowError;
+    }
+
     DicomImageView* imageView = new DicomImageView();
 
     imageView->SetRawImage(rawPixels, static_cast<int> (rawWidth), static_cast<int> (rawHeight));
 
+    QString photometricInterpretation;
+
+    QString photometricError;
+
+    if (!reader.GetPhotometricInterpretation(filePath, photometricInterpretation, photometricError))
+    {
+        QMessageBox::critical(nullptr, "Photometric Interpretation Error", photometricError);
+
+        return -1;
+    }
+
+    qDebug() << "Photometric Interpretation:" << photometricInterpretation;
+
+    if (photometricInterpretation == "MONOCHROME1")
+    {
+        imageView->SetMonochrome1(true);
+    }
+    else if (photometricInterpretation == "MONOCHROME2")
+    {
+        imageView->SetMonochrome1(false);
+    }
+    else
+    {
+        QMessageBox::critical(nullptr, "Unsupported Image Format", "Unsupported Photometric Interpretation: " + photometricInterpretation);
+
+        return -1;
+    }
+
+
+    imageView->SetDicomWindowLevel(dicomWindowCenter, dicomWindowWidth);
+
+    int initialWidth = static_cast<int>(imageView->GetWindowWidth());
+
+    int initialLevel = static_cast<int>(imageView->GetWindowLevel());
+
+
     // windows slider
 
-    QLabel* widthLabel = new QLabel("Window Width: 3916");
+    QLabel* widthLabel = new QLabel("Window Width");
     QSlider* widthSlider = new QSlider(Qt::Horizontal);
 
-    widthSlider->setRange(1, 4096);
-    widthSlider->setValue(3916);
-
     //window level slider
-    QLabel* levelLabel = new QLabel("Window Width: 1958");
+    QLabel* levelLabel = new QLabel("Window Level");
     QSlider* levelSlider = new QSlider(Qt::Horizontal);
 
+    widthSlider->setRange(1, 4096);
+    widthSlider->setValue(initialWidth);
+
     levelSlider->setRange(0, 4095);
-    levelSlider->setValue(1958);
+    levelSlider->setValue(initialLevel);
+
+
+    widthLabel->setText(QString("Window Width: %1").arg(imageView->GetWindowWidth(),0,'f',2));
+    levelLabel->setText(QString("Window Level: %1").arg(imageView->GetWindowLevel(),0,'f',2));
+
+    QPushButton* autoWindowButton = new QPushButton("Reset / Auto Window");
+    QPushButton* resetDicomWindowButton = new QPushButton("Reset DICOM Window");
 
     // Create main window container
     QWidget window;
@@ -180,6 +258,61 @@ int main(int argc, char* argv[])
 
     }
 
+    // test for window centers and widths
+    std::vector<double> windowCenters;
+    std::vector<double> windowWidths;
+
+    errorMessage.clear();
+
+    bool centersLoaded = reader.GetWindowCenters(filePath, windowCenters, errorMessage);
+
+    if (!centersLoaded)
+    {
+        qDebug() << "Windows Centers error:" << errorMessage;
+    }
+    else
+    {
+        qDebug() << "WindowCenters:";
+
+        for (double center : windowCenters)
+            qDebug() << center;
+    }
+
+    bool widthsLoaded = reader.GetWindowWidths(filePath, windowWidths, errorMessage);
+
+    if (!widthsLoaded)
+    {
+        qDebug() << "Windows Widths error:" << errorMessage;
+    }
+    else
+    {
+        qDebug() << "WindowWidths:";
+
+        for (double width : windowWidths)
+            qDebug() << width;
+    }
+
+    qDebug() << "Number of centers:" << windowCenters.size();
+    qDebug() << "Number of widths:" << windowWidths.size();
+
+    if (windowCenters.size() != windowWidths.size())
+    {
+        QMessageBox::critical(nullptr, "DICOM Windowing", "The number of Window Center values do not math the numver of Winow Width values");
+
+        return 1;
+    }
+
+    QComboBox* windowPresetCombo = new QComboBox();
+
+    for (size_t i = 0; i < windowCenters.size(); i++)
+    {
+        QString presetName = QString("Preset %1 (Center %2, Width %3)")
+            .arg(i + 1)
+            .arg(windowCenters[i])
+            .arg(windowWidths[i]);
+
+        windowPresetCombo->addItem(presetName);
+    }
 
     //Configure table appearance
     table->setAlternatingRowColors(true);
@@ -203,6 +336,11 @@ int main(int argc, char* argv[])
 
     layout->addWidget(levelLabel);
     layout->addWidget(levelSlider);
+
+    layout->addWidget(autoWindowButton);
+    layout->addWidget(resetDicomWindowButton);
+    layout->addWidget(windowPresetCombo);
+
 
     contentLayout->addWidget(table, 3);
     contentLayout->addWidget(imageView, 2);
@@ -232,19 +370,96 @@ int main(int argc, char* argv[])
             }
         });
 
-    QObject::connect(widthSlider, &QSlider::valueChanged, imageView, [imageView, widthLabel](int value)
+    auto UpdateWindowPresetText = [&]()
+        {
+            int index = windowPresetCombo->currentIndex();
+
+            if (index < 0)
+                return;
+
+            windowPresetCombo->setItemText(
+                index,
+                QString("Preset %1 (Center %2, Width %3)")
+                .arg(index + 1)
+                .arg(imageView->GetWindowLevel(), 0, 'f', 2)
+                .arg(imageView->GetWindowWidth(), 0, 'f', 2)
+
+            );
+        };
+
+    QObject::connect(widthSlider, &QSlider::valueChanged, imageView, [&](int value)
         {
             imageView->SetWindowWidth(value);
 
-            widthLabel->setText(QString("Window width:%1").arg(value));
+            widthLabel->setText(QString("Window Width: %1").arg(value));
+            UpdateWindowPresetText();
+
         });
 
-    QObject::connect(levelSlider, &QSlider::valueChanged, imageView, [imageView, levelLabel](int value)
+    QObject::connect(levelSlider, &QSlider::valueChanged, imageView, [&](int value)
         {
             imageView->SetWindowLevel(value);
 
-            levelLabel->setText(QString("WIndow Level:%1").arg(value));
+            levelLabel->setText(QString("WIndow Level: %1").arg(value));
+
+            UpdateWindowPresetText();
+
+
         });
+
+    QObject::connect(autoWindowButton, &QPushButton::clicked, [&]()
+        {
+            imageView->ResetWindowLevel();
+
+            double automaticWidth = imageView->GetWindowWidth();
+
+            double automaticLevel = imageView->GetWindowLevel();
+
+            widthSlider->setValue(static_cast<int>(std::round(automaticWidth)));
+
+            levelSlider->setValue(static_cast<int>(std::round(automaticLevel)));
+
+            widthLabel->setText(QString("Window Width: %1").arg(automaticWidth,0,'f',2));
+
+            levelLabel->setText(QString("Window Level: %1").arg(automaticLevel,0,'f',2));
+
+        });
+
+    QObject::connect(resetDicomWindowButton, &QPushButton::clicked, [&]()
+        {
+            imageView->SetDicomWindowLevel(
+                dicomWindowCenter,
+                dicomWindowWidth);
+
+            widthSlider->setValue(static_cast<int>(std::round(dicomWindowWidth)));
+
+            levelSlider->setValue(static_cast<int>(std::round(dicomWindowCenter)));
+
+            widthLabel->setText(QString("Window Width : %1").arg(dicomWindowWidth, 0, 'f', 2));
+
+            levelLabel->setText(QString("Window Level: %1").arg(dicomWindowCenter, 0, 'f', 2));
+
+        });
+
+    QObject::connect(windowPresetCombo, &QComboBox::currentIndexChanged, [=](int index)
+        {
+            if (index < 0 || index >= static_cast<int>(windowCenters.size()))
+                return;
+
+            imageView->SetDicomWindowLevel(windowCenters[index], windowWidths[index]);
+
+            widthSlider->setValue(static_cast<int>(std::round(windowWidths[index])));
+
+            levelSlider->setValue(static_cast<int>(std::round(windowCenters[index])));
+
+            widthLabel->setText(QString::number(windowWidths[index], 'f', 2));
+
+            levelLabel->setText(QString::number(windowCenters[index], 'f', 2));
+
+        });
+
+
+
 
     window.show();
 

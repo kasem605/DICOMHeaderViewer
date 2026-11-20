@@ -16,10 +16,24 @@ public:
 
 	void SetWindowWidth(double width);
 
+	double GetWindowWidth() const;
+
 	void SetWindowLevel(double level);
 
-	void SetRawImage(const std::vector<uint16_t>& pixels, int width, int height)
-		;
+	double GetWindowLevel() const;
+
+	void AutoWindowLevel();
+
+	void SetRawImage(const std::vector<uint16_t>& pixels, int width, int height);
+
+	void ResetWindowLevel();
+
+	void SetDicomWindowLevel(double windowLevel, double windowCenter);
+
+	void SetMonochrome1(bool monochrome1);
+
+	bool PhotometricInterpretation(const QString& filePath, QString& photometricInterpretation, QString& errorMessage);
+
 protected:
 	void paintEvent(QPaintEvent* event) override;
 
@@ -32,5 +46,7 @@ private:
 
 	int imageWidth_ = 0;
 	int imageHeight_ = 0;
+
+	bool monochrome1_;
 
 };

@@ -10,6 +10,10 @@
 
 #include <QDebug>
 
+#include <cmath>
+
+#include <QStringList>
+
 
 
 QString FormatTag(const DcmTag& tag)
@@ -214,6 +218,92 @@ bool DicomHeaderReader::LoadRawPixelData(
 	return true;
 }
 
+bool DicomHeaderReader::GetWindowCenter(const QString& filePath, double& windowCenter, QString& errorMessage)
+{
+	windowCenter = 0.0;
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if (status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+		return false;
+	}
+
+	OFString value;
+
+	status = fileFormat.getDataset()->findAndGetOFString(
+		DCM_WindowCenter,
+		value
+	);
+
+	if (status.bad())
+	{
+		errorMessage = "Window center not found.";
+		return false;
+	}
+
+	bool ok = false;
+
+	windowCenter = QString::fromLatin1(value.c_str()).toDouble(&ok);
+
+	if (!ok)
+	{
+		errorMessage = "Invalid Window Center value.";
+		return false;
+	}
+
+	return true;
+}
+
+bool DicomHeaderReader::GetWindowWidth(const QString& filePath, double& windowWidth, QString& errorMessage)
+{
+	windowWidth = 0.0;
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if (status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+		return false;
+	}
+
+	OFString value;
+
+	status = fileFormat.getDataset()->findAndGetOFString(
+		DCM_WindowWidth,
+		value
+	);
+
+	if (status.bad())
+	{
+		errorMessage = "Window Width not found.";
+		return false;
+	}
+
+	bool ok = false;
+
+	windowWidth = QString::fromLatin1(value.c_str()).toDouble(&ok);
+
+	if (!ok || windowWidth <= 0.0)
+	{
+		errorMessage = "Invalid Window Width value.";
+		return false;
+	}
+
+	return true;
+}
+
 const std::vector<DicomHeaderEntry>& DicomHeaderReader::Entries() const
 {
 	return entries_;
@@ -273,4 +363,140 @@ void DicomHeaderReader::ReadItem(DcmItem* item, int level, const QString& sectio
 		}
 	}
 
+}
+
+bool DicomHeaderReader::GetPhotometricInterpretation(const QString& filePath, QString& photometricInterpretation, QString& errorMessage)
+{
+	photometricInterpretation.clear();
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if (status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+
+		return false;
+	}
+
+	OFString value;
+
+	status = fileFormat.getDataset()->findAndGetOFString(DCM_PhotometricInterpretation, value);
+
+	if (status.bad())
+	{
+		errorMessage = "Photometric Interpretation not found.";
+
+		return false;
+	}
+
+	photometricInterpretation = QString::fromLatin1(value.c_str()).trimmed();
+
+	return true;
+}
+
+bool DicomHeaderReader::GetWindowWidths(const QString& filePath, std::vector<double>& windowWidths, QString& errorMessage)
+{
+	windowWidths.clear();
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if (status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+
+		return false;
+	}
+
+	OFString value;
+
+	status = fileFormat.getDataset()->findAndGetOFStringArray(DCM_WindowWidth, value);
+
+	if (status.bad())
+	{
+		errorMessage = "Window width not found.";
+
+		return false;
+	}
+
+	// DICOM stores multiple values separated by backslashes
+
+	QStringList values = QString::fromLatin1(value.c_str()).split('\\');
+
+	for (const QString& item : values)
+	{
+		bool ok = false;
+
+		double width = item.trimmed().toDouble(&ok);
+
+		if (!ok || !std::isfinite(width) || width < 1.0)
+		{
+			windowWidths.clear();
+			errorMessage = "Invalid DICOM Window Width value.";
+			return false;
+		}
+
+		windowWidths.push_back(width);
+	}
+	return !windowWidths.empty();
+}
+
+bool DicomHeaderReader::GetWindowCenters(const QString& filePath, std::vector<double>& windowCenters, QString& errorMessage)
+{
+	windowCenters.clear();
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if (status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+
+		return false;
+	}
+
+	OFString value;
+
+	status = fileFormat.getDataset()->findAndGetOFStringArray(DCM_WindowCenter, value);
+
+	if (status.bad())
+	{
+		errorMessage = "Window center not found.";
+
+		return false;
+	}
+
+	// DICOM stores multiple values separated by backslashes
+
+	QStringList values = QString::fromLatin1(value.c_str()).split('\\');
+
+	for (const QString& item : values)
+	{
+		bool ok = false;
+
+		double center = item.trimmed().toDouble(&ok);
+
+		if (!ok || !std::isfinite(center) || center < 1.0)
+		{
+			windowCenters.clear();
+			errorMessage = "Invalid DICOM Window Center value.";
+			return false;
+		}
+
+		windowCenters.push_back(center);
+	}
+	return !windowCenters.empty();
 }
