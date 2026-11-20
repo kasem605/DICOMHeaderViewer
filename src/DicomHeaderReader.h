@@ -34,6 +34,17 @@ public:
 	const std::vector<DicomHeaderEntry>& Entries() const;
 
 
+	bool GetWindowCenter(const QString& filePath, double& windowCenter, QString& errorMessage);
+
+	bool GetWindowWidth(const QString& filePath, double& windowWidth, QString& errorMessage);
+
+	bool GetPhotometricInterpretation(const QString& filePath, QString& photometricInterpretation, QString& errorMessage);
+
+	bool GetWindowCenters(const QString& filePath, std::vector<double>& windowCenters, QString& errorMessage);
+
+	bool GetWindowWidths(const QString& filePath, std::vector<double>& windowWidths, QString& errorMessage);
+
+
 private:
 
 	std::vector<DicomHeaderEntry> entries_;
