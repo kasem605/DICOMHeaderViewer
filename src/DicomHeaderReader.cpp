@@ -14,6 +14,9 @@
 
 #include <QStringList>
 
+#include <dcmtk/dcmdata/dcsequen.h>
+
+
 
 
 QString FormatTag(const DcmTag& tag)
@@ -500,3 +503,289 @@ bool DicomHeaderReader::GetWindowCenters(const QString& filePath, std::vector<do
 	}
 	return !windowCenters.empty();
 }
+
+bool DicomHeaderReader::GetWindowExplanations(const QString& filePath, std::vector<QString>& explanations, QString& errorMessage)
+{
+	explanations.clear();
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if (status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+
+		return false;
+	}
+
+	OFString value;
+
+	status = fileFormat.getDataset()->findAndGetOFStringArray(DCM_WindowCenterWidthExplanation, value);
+
+	if (status.bad())
+	{
+		errorMessage = "Window center/width explanation not found.";
+
+		return false;
+	}
+
+	// DICOM stores multiple values separated by backslashes
+
+	QStringList values = QString::fromLatin1(value.c_str()).split('\\');
+
+	for (const QString& item : values)
+	{
+		explanations.push_back(item.trimmed());
+	}
+	return !explanations.empty();
+}
+
+bool DicomHeaderReader::HasVoiLutSequence(const QString& filePath, bool& hasVoiLut, QString& errorMessage)
+{
+	hasVoiLut = false;
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if (status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+
+		return false;
+	}
+
+	DcmSequenceOfItems* voiLutSequence = nullptr;
+
+	status = fileFormat.getDataset()->findAndGetSequence(DCM_VOILUTSequence, voiLutSequence);
+
+	if (status.bad())
+	{
+		// the sequence is optional, so it is not an error
+		hasVoiLut = false;
+
+		return true;
+	}
+
+	hasVoiLut = (voiLutSequence != nullptr);
+
+	return true;
+}
+
+bool DicomHeaderReader::GetVoiLuts(const QString& filePath, std::vector<DicomVoiLut>& voiLuts, QString& errorMessage)
+{
+	voiLuts.clear();
+	errorMessage.clear();
+
+	QByteArray encodedPath = QFile::encodeName(filePath);
+
+	DcmFileFormat fileFormat;
+
+	OFCondition status = fileFormat.loadFile(encodedPath.constData());
+
+	if(status.bad())
+	{
+		errorMessage = QString::fromLocal8Bit(status.text());
+
+		return false;
+	}
+
+	DcmSequenceOfItems* sequence = nullptr;
+
+	status = fileFormat.getDataset()->findAndGetSequence(DCM_VOILUTSequence, sequence);
+
+	if (status.bad() || sequence == nullptr)
+	{
+		return true;
+	}
+
+	for (unsigned long i = 0; i < sequence->card(); ++i)
+	{
+		DcmItem* item = sequence->getItem(i);
+
+		if (item == nullptr)
+		{
+			continue;
+		}
+
+		DicomVoiLut lut;
+
+		//Read LUT descriptor
+		Uint16 descriptor[3] = {};
+
+		status = item->findAndGetUint16(DCM_LUTDescriptor, descriptor[0], 0);
+
+		if (status.bad())
+		{
+			errorMessage = "Unable to read VOI LUT descriptor";
+			voiLuts.clear();
+			return false;
+		}
+
+		status = item->findAndGetUint16(DCM_LUTDescriptor, descriptor[1], 0);
+
+		if (status.bad())
+		{
+			errorMessage = "Unable to read VOI LUT descriptor";
+			voiLuts.clear();
+			return false;
+		}
+
+		status = item->findAndGetUint16(DCM_LUTDescriptor, descriptor[2], 0);
+
+		if (status.bad())
+		{
+			errorMessage = "Unable to read VOI LUT descriptor";
+			voiLuts.clear();
+			return false;
+		}
+
+		lut.numberOfEntries = descriptor[0] == 0 ? 65536 : descriptor[0];
+
+        // validate the number of entries
+		if (lut.numberOfEntries == 0 || lut.numberOfEntries > 65536)
+		{
+			errorMessage = "Unable to read LUT first mapped value";
+			voiLuts.clear();
+			return false;
+		}
+
+
+		//Read pixel representation from the parent dataset
+		Uint16 pixelRepresentation = 0;
+
+		status = fileFormat.getDataset()->findAndGetUint16(DCM_PixelRepresentation, pixelRepresentation);
+
+		if (status.bad() || pixelRepresentation > 1)
+		{
+			errorMessage = "Invalid or missing Pixel Representation";
+			voiLuts.clear();
+			return false;
+		}
+
+		// Interpret the second LUT Descriptor value correctly.
+		if (pixelRepresentation == 0)
+		{
+			Uint16 firstMappedValue = 0;
+
+			status = item->findAndGetUint16(DCM_LUTDescriptor, firstMappedValue, 1);
+
+			if (status.bad())
+			{
+				errorMessage = "Unable to read LUT first mapped value";
+				voiLuts.clear();
+				return false;
+			}
+
+			lut.firstMappedValue = firstMappedValue;
+		}
+		else
+		{
+			Sint16 firstMappedValue = 0;
+
+			status = item->findAndGetSint16(DCM_LUTDescriptor, firstMappedValue);
+
+			if (status.bad())
+			{
+				errorMessage = "Unable to read LUT signed first mapped value";
+				voiLuts.clear();
+				return false;
+			}
+
+			lut.firstMappedValue = firstMappedValue;
+
+		}
+
+		lut.bitsPerEntry = descriptor[2];
+
+		//Read the optional LUT explanation
+		OFString explanation;
+
+		if (item->findAndGetOFString(DCM_LUTExplanation, explanation).good())
+		{
+			lut.explanation = QString::fromLatin1(explanation.c_str()).trimmed();
+		}
+
+		// Read LUT data
+		DcmElement* lutDataElement = nullptr;
+
+		status = item->findAndGetElement(DCM_LUTData, lutDataElement);
+
+		if (status.bad() || lutDataElement == nullptr)
+		{
+			errorMessage = "Unable to read VOI LUT data";
+			voiLuts.clear();
+			return false;
+		}
+
+
+		// Determine the actual encoded length in bytes
+		const Uint32 dataLength = lutDataElement->getLength();
+
+		if (dataLength == 0)
+		{
+			errorMessage = "VOI LUT is empty";
+			voiLuts.clear();
+			return false;
+		}
+
+		Uint16* lutData16 = nullptr;
+
+		status = lutDataElement->getUint16Array(lutData16);
+
+		if (status.bad() || lutData16 == nullptr)
+		{
+			errorMessage = "Unable to extract VOI LUT data";
+			voiLuts.clear();
+			return false;
+		}
+
+		//calculate the number of available 16-bit words
+		const size_t wordCount = dataLength / sizeof(Uint16);
+
+		if (wordCount < lut.numberOfEntries)
+		{
+			errorMessage = "VOI LUT data contains insufficient entries";
+			voiLuts.clear();
+			return false;
+		}
+		// determine the actual number of 16 bit words available
+		unsigned long actualWordCount = lutDataElement->getLength() / 2;
+
+		if (actualWordCount < lut.numberOfEntries)
+		{
+			errorMessage = "VOI LUT data contains fewer entries than expected.";
+			voiLuts.clear();
+			return false;
+		}
+
+		// copy LUT values
+		lut.lutData.reserve(lut.numberOfEntries);
+
+		for (int32_t j = 0; j < lut.numberOfEntries; ++j)
+		{
+			uint16_t value = lutData16[j];
+
+			// keep the number of significant bits specified by the descriptor
+			if (lut.bitsPerEntry < 16)
+			{
+				const uint16_t mask = static_cast<uint16_t>((1u << lut.bitsPerEntry) - 1u);
+
+				value &= mask;
+			}
+
+			lut.lutData.push_back(value);
+		}
+	}
+
+	return true;
+};
+
+

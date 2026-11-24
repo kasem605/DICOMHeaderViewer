@@ -31,7 +31,7 @@ add_executable(DICOMHeaderViewer
     src/DicomHeaderEntry.h
     src/DicomImageView.h
     src/DicomImageView.cpp
-)
+  "src/DicomVoiLut.h" "src/DicomVoiLutDecoder.h" "src/DicomVoiLutDecoder.cpp")
 
 target_link_libraries(DICOMHeaderViewer
     PRIVATE

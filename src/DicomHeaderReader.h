@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DicomHeaderEntry.h"
+#include "DicomVoiLut.h"
 
 #include <QString>
 #include <vector>
@@ -43,6 +44,12 @@ public:
 	bool GetWindowCenters(const QString& filePath, std::vector<double>& windowCenters, QString& errorMessage);
 
 	bool GetWindowWidths(const QString& filePath, std::vector<double>& windowWidths, QString& errorMessage);
+
+	bool GetWindowExplanations(const QString& filePath, std::vector<QString>& explanations, QString& errorMessage);
+
+	bool HasVoiLutSequence(const QString& filePath, bool& hasVoiLut, QString& errorMessage);
+
+	bool GetVoiLuts(const QString& filePath, std::vector<DicomVoiLut>& voiLuts, QString& errorMessage);
 
 
 private:
