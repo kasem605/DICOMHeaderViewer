@@ -304,14 +304,72 @@ int main(int argc, char* argv[])
 
     QComboBox* windowPresetCombo = new QComboBox();
 
+    std::vector<QString> windowExplanations;
+
+
     for (size_t i = 0; i < windowCenters.size(); i++)
     {
-        QString presetName = QString("Preset %1 (Center %2, Width %3)")
-            .arg(i + 1)
+        QString presetName;
+
+        if (i < windowExplanations.size() && !windowExplanations[i].trimmed().isEmpty())
+        {
+            presetName = windowExplanations[i].trimmed();
+        }
+        else
+        {
+            presetName = QString("Preset %1").arg(i + 1);
+        }
+
+        presetName += QString(" (Center: %1, Width: %2)")
             .arg(windowCenters[i])
             .arg(windowWidths[i]);
 
         windowPresetCombo->addItem(presetName);
+    }
+
+    // test window explanations
+
+
+    bool explanationsLoaded = reader.GetWindowExplanations(filePath, windowExplanations, errorMessage);
+
+    if (explanationsLoaded)
+    {
+        qDebug() << "Windows Explanations:";
+
+        for (const QString& explanation : windowExplanations)
+        {
+            qDebug() << explanation;
+        }
+    }
+    else
+    {
+        qDebug() << "Window Explanations:" << errorMessage;
+    }
+
+    bool hasVoiLut = false;
+
+    QString voiLutError;
+
+    if (reader.HasVoiLutSequence(filePath, hasVoiLut, voiLutError))
+    {
+        qDebug() << "VOI LUT sequence exists:" << hasVoiLut;
+    }
+    else
+    {
+        qDebug() << "VOI LUT sequence has error:" << voiLutError;
+    }
+
+
+    // Test LUT
+    std::vector<DicomVoiLut> voiLuts;
+
+    if (reader.GetVoiLuts(filePath, voiLuts, voiLutError))
+    {
+        qDebug() << "Number of VOI LUTs:" << voiLuts.size();
+    }
+    else
+    {
+        qDebug() << "VOI LUT error:" << voiLutError;
     }
 
     //Configure table appearance
